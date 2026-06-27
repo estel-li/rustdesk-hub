@@ -122,6 +122,8 @@ git -C rustdesk-api submodule status
 
 最后一条允许为空,但文档必须说明这是预期。
 
+状态: 进行中(部分完成,2026-06-27)。fork 维护手册已草拟(`docs/operations/hbb_common-ce.md`),`CE_BASE_SHA = a920d00945e1d2441b3f77b2677054cb8c3d9dd2` 已选定为 `ce/base` 基线;**两仓库 `.gitmodules` URL 切换 pending**——必须由具备 GitHub 写权限的运维人员先按运维手册 §3 创建 `<org>/hbb_common-ce` 仓库并推送 `ce/base @ a920d00` 与 `upstream/master`、`ce-base-v0` tag,再回到任务卡 §5 步骤 4–5 完成 URL 切换与 pin 重定向。
+
 ### CE-M0-2 hbbs PostgreSQL 后端
 
 目标:
@@ -145,6 +147,8 @@ cargo test database
 
 如果子模块未初始化导致无法构建,记录原因并给出可复现初始化命令。
 
+状态: 完成 (2026-06-27,工作树变更待审,尚未 commit;详见 `docs/ai-tasks/CE-M0-2.md` 与 `docs/operations/database.md`)。
+
 ### CE-M0-3 metrics 独立端口
 
 目标:
@@ -162,6 +166,8 @@ cargo test database
 curl http://127.0.0.1:<hbbs_metrics_port>/metrics
 curl http://127.0.0.1:<hbbr_metrics_port>/metrics
 ```
+
+状态: 完成 (2026-06-27,工作树变更待审,尚未 commit;详见 `docs/ai-tasks/CE-M0-3.md` 与 `docs/operations/metrics.md`)。
 
 ### CE-M0-4 rustdesk-api Redis / metrics healthcheck
 
@@ -183,6 +189,8 @@ go test ./...
 go test ./lib/cache ./utils
 ```
 
+状态: 完成 (2026-06-27, working tree) — 新增 `config/metrics.go`、`http/metrics/metrics.go`、`http/middleware/metrics.go`,在 `cmd/apimain.go` 增加 redis client 与 cache 后端的 healthcheck + 内存缓存兜底;修复 `cache.type` 空/未知值时 `global.Cache=nil` 的隐藏 panic;`/metrics` 默认监听 `127.0.0.1:21115`,与 21114 完全独立。
+
 ### CE-M0-5 systemd 加固
 
 目标:
@@ -200,6 +208,8 @@ go test ./lib/cache ./utils
 systemd-analyze security rustdesk-hbbs.service
 systemd-analyze security rustdesk-hbbr.service
 ```
+
+状态: 完成 (2026-06-27, working tree) — `rustdesk-server/systemd/rustdesk-hbbs.service` 与 `rustdesk-hbbr.service` 已经在 CE-M0-7 落 `User=rustdesk/Group=rustdesk` 之上补齐 §4.1 沙箱字段全集(`NoNewPrivileges`、`ProtectSystem=strict`、`ProtectHome`、`PrivateTmp`、`ProtectKernel*`、`ProtectControlGroups`、`RestrictSUIDSGID`、`LockPersonality`、`RestrictRealtime`、`SystemCallArchitectures=native`、`ReadWritePaths=/var/lib/rustdesk-server /var/log/rustdesk-server`);两份 `postinst` 加 `getent passwd rustdesk` 守卫 + `adduser --system --group --no-create-home --shell /usr/sbin/nologin`,并在 `mkdir -p` 之后 `chown -R rustdesk:rustdesk` + `chmod 0750` 覆盖历史 root 部署。Docker / FreeBSD / postrm 未改动。`systemd-analyze` 系列命令在 macOS 开发盒上无法执行,改用静态 grep 校验沙箱字段写入到位。
 
 ### CE-M0-6 PeerMap GC 与 tcp_punch key
 
@@ -221,6 +231,8 @@ cargo test peer
 cargo test rendezvous
 ```
 
+状态: 完成 (2026-06-27, working tree) — 新增 `rustdesk-server/src/tcp_punch_key.rs` 实现 `TcpPunchKey { ip, port, peer_id }` 强类型 key 与 `TcpPunchEntry { sink, inserted_at }` 载荷,`rendezvous_server.rs` 的 `tcp_punch` 字段由 `HashMap<SocketAddr, Sink>` 改为 `HashMap<TcpPunchKey, TcpPunchEntry<Sink>>`;两处插入分别按 `ph.id` / `rf.id` 构造 key;`handle_tcp_punch_hole_request` 走新增 O(1) `send_to_tcp_by_key`,RelayResponse / hole_sent / local_addr 仍按 `(ip, port)` fallback;连接关闭兜底改为 `remove_all_by_addr` 清掉所有挂在该 addr 上的 sink。`io_loop` 的 `select!` 新增 60s GC 分支,清理 `tcp_punch` 入表 > `TCP_PUNCH_TTL_SECS`(默认 30s)的条目并调用新增 `PeerMap::gc(PEER_MAP_IDLE_TTL_SECS)`(默认 120s)。两个阈值均可由同名环境变量覆盖。`cargo test --lib peer / rendezvous / tcp_punch_key` 共 12 个相关单测全绿。烟测与长跑标记 skipped(macOS dev 盒非主部署目标)。
+
 ### CE-M0-7 管理 CLI 改 UDS + token
 
 目标:
@@ -235,6 +247,8 @@ cargo test rendezvous
 验收:
 - 本机普通用户无法调用管理命令。
 - `rustdesk` 用户或 root 可以调用。
+
+状态: 完成 (2026-06-27, working tree) — 新增 `rustdesk-server/src/admin_cli.rs`(UDS bind+chmod 0o660、TCP loopback 兜底、32 字节 token、常量时间比较、Linux `SO_PEERCRED`);hbbs `handle_listener2` / hbbr `handle_connection` 的 `is_loopback()` 旁路已删除;hbbs/hbbr 启动期通过 `admin_cli::spawn_listener` 起 UDS,token 文件 mode 0o640 写到 `--admin-token-file`(systemd 路径 `/var/lib/rustdesk-server/admin.token`);新增 CLI 参数 `--admin-socket` / `--admin-tcp` / `--admin-token-file` / `--admin-disable`;`systemd/rustdesk-hbb{s,r}.service` 加 `User=rustdesk` + `RuntimeDirectory=rustdesk-server` + `StateDirectory=rustdesk-server` (与 CE-M0-5 协调);集成测试 `tests/admin_cli_test.rs` 覆盖 happy path / missing token / wrong token / oversize / 权限 / disabled / 非 loopback bind 拒绝。
 
 ---
 
@@ -258,6 +272,8 @@ cargo test rendezvous
 cd rustdesk-api
 go test ./model ./service
 ```
+
+状态: 完成 (2026-06-27, working tree) — 新增 `rustdesk-api/model/user_mfa.go`(UserId 唯一索引、Secret/RecoveryCodes/EnabledAt/LastUsedAt,Secret `json:"-"`)、`rustdesk-api/utils/secret_cipher.go`(AES-256-GCM + HKDF-SHA256 fallback)、`rustdesk-api/utils/password.go` 追加 `HashRecoveryCode`/`VerifyRecoveryCode`(bcrypt)、`rustdesk-api/config/mfa.go` + `Config.Mfa` + `conf/config.yaml` 配置段;`cmd/apimain.go` `DatabaseVersion` 265→266、`AutoMigrate(&model.UserMfa{})`、保留 `v.Version < 266` 迁移 hook;测试 `model/user_mfa_test.go`(AutoMigrate/唯一索引/EnabledAt 指针/旧版本兼容)、`utils/secret_cipher_test.go`(round-trip/篡改/HKDF 派生/确定性/hex raw key)、`utils/password_test.go` 追加 recovery hash 验证。`go test ./model ./service` `go vet ./...` `gofmt -l` 全部通过。
 
 ### CE-M1-2 MFA service
 
@@ -307,6 +323,8 @@ go test ./model ./service
 - 未开启 MFA 的登录流程保持原样。
 - 开启 MFA 的账号必须输入正确 TOTP 才能拿 token。
 
+状态: 完成(实现待 git commit,详见 docs/ai-tasks/CE-M1-4.md)。
+
 ### CE-M1-5 后台强制 MFA
 
 目标:
@@ -343,6 +361,8 @@ audit_event:
 - `/api/audit/file` 继续工作。
 - `/admin/audit_file/list` 继续工作。
 
+状态: 完成 (commit pending)
+
 ### CE-M1-7 客户端审计上报
 
 目标:
@@ -355,6 +375,8 @@ audit_event:
 - 文本剪贴板同步。
 - 文件剪贴板同步。
 - 连接被策略拒绝、异常断开、长时间 relay。
+
+状态: 完成 (待提交 commit)
 
 ### CE-M1-8 WS Register 补齐
 
@@ -369,6 +391,8 @@ audit_event:
 验收:
 - WS-only 客户端能独立注册。
 - 旧 TCP/UDP 注册流程不变。
+
+状态: 完成(WS / TCP / UDP 共享 `process_register_peer` 与 `process_register_pk` helper;集成测试 `rustdesk-server/tests/ws_register.rs` 覆盖 happy path / uuid mismatch / 限流 / 新 id request_pk / ConfigUpdate 不触发等 5 个用例)。
 
 ### CE-M1-9 轻量 Client Builder
 
@@ -387,6 +411,8 @@ RustDesk-host=id.example.com,key=<base64>,api=https://api.example.com,relay=rela
 - 生成下载页和二维码。
 - 不在 M1 做全平台编译、不改 icon、不做签名。
 
+状态: 完成 (working tree, pending review) — 见 `docs/ai-tasks/CE-M1-9.md` §7。
+
 ### CE-M1-10 运维文档
 
 新增:
@@ -399,6 +425,8 @@ RustDesk-host=id.example.com,key=<base64>,api=https://api.example.com,relay=rela
 - 常见故障。
 - 回滚方式。
 - 验收步骤。
+
+状态: 完成 (working tree, pending review) — 见 `docs/ai-tasks/CE-M1-10.md` §7;新增 `docs/operations/2fa.md` 与 `docs/operations/audit-events.md`,§1 矩阵第 6 / 8 行同步置 ✅。
 
 ---
 

@@ -34,9 +34,9 @@
 | 3 | API | rustdesk-api `/api/*` + Swagger | ✅ | 已兼容官方 Pro API。差距:OpenAPI 未与官方 spec 做兼容矩阵回归。 |
 | 4 | OIDC | rustdesk-api `service/oauth.go`(go-oidc/v3)+ `APP_WEB_SSO` | ✅ | 已支持 Github / Google / Linuxdo / 通用 OIDC。 |
 | 5 | LDAP | rustdesk-api `service/ldap.go` + `admin-group`/`allow-group` 映射 | ✅ | 兼容 AD `userAccountControl`,差距:未支持嵌套组与 SCIM 同步。 |
-| 6 | 2FA(API/Web 账号 MFA) | rustdesk 客户端本机会话已有 `auth_2fa.rs`;rustdesk-api 登录 MFA 缺失 | ❌ | 需补齐 API/Web 账号登录 TOTP、备份码、强制开启策略;不要与被控端本机 2FA 混淆。 |
+| 6 | 2FA(API/Web 账号 MFA) | rustdesk-api `model/user_mfa.go` + `service/mfa.go` + `/api/login-mfa`;后台强制位 `user.mfa_required` / `group.mfa_required` | ✅ | M1 已交付 TOTP + 备份码 + 强制 MFA;运维手册见 `docs/operations/2fa.md`。与被控端本机会话级 2FA(`auth_2fa.rs`)互不影响。 |
 | 7 | Address Book(地址簿) | rustdesk-api `model/addressBook.go` + `tag.go` + `group.go` | ✅ | 个人地址簿、共享地址簿、标签、设备组齐备。 |
-| 8 | Log Management(连接 / 文件 / 告警) | rustdesk-api `model/audit.go` + `loginLog.go` + `/api/audit/{conn,file}` | 🟡 | 连接/文件审计已有独立表与端点;**剪贴板 / 告警 / 录屏审计缺失**,客户端上报覆盖与 Pro 事件语义仍需对齐。 |
+| 8 | Log Management(连接 / 文件 / 告警) | rustdesk-api `model/audit.go`(`AuditConn` / `AuditFile` / `AuditEvent`)+ `loginLog.go` + `/api/audit/{conn,file,event}` | ✅ | M1 在保留 `AuditConn` / `AuditFile` 的前提下新增统一 `AuditEvent`(剪贴板 / 告警 / 命令 / 录屏占位),后台 list 支持按 kind / 时间过滤;运维手册见 `docs/operations/audit-events.md`。录屏审计 GA 仍排期 M3。 |
 | 9 | Device Management | rustdesk-api `model/peer.go` + serverCmd(`service/serverCmd.go`)| 🟡 | 设备列表/分组/封禁已就绪。差距:① 设备策略下发(开屏 PIN、自动接受等)未集成到客户端;② 离线设备远程唤醒/解绑。 |
 | 10 | Security Settings Sync | hbbs `ConfigUpdate`(由 `ConfigureUpdate`/`serial` 触发)+ rustdesk-api `serverCmd` | 🟡 | 仅能下发"客户端连到哪台 hbbs/hbbr"的引导参数,**无法集中下发"密码复杂度、剪贴板/文件传输开关、白名单"等运行时策略**。 |
 | 11 | Access Control(细粒度 RBAC) | rustdesk-api `BackendUserAuth + AdminPrivilege` + 地址簿共享权限 | 🟡 | 当前具备后台 admin/user 与地址簿读写控制。Pro 的 admin role / control role / strategy / 设备组访问矩阵仍未系统化实现。 |
@@ -45,7 +45,7 @@
 | 14 | WebSocket | hbbs `:21118` / hbbr `:21119` | ✅ | 信令与中继的 WS 通道已就绪。差距:WS 路径不支持 `RegisterPeer`/`RegisterPk`,WS-only 客户端无法独立注册。 |
 | 15 | Web Client Self-host | rustdesk-api `/webclient` + `/webclient2` | ✅ | 已托管。差距:依赖 `RUSTDESK_API_RUSTDESK_WEBCLIENT_MAGIC_QUERYONLINE` 走 hbbs fork(`lejianwen/rustdesk-server`),官方上游 hbbs 不暴露该接口。 |
 
-**总结**:15 项中 ✅ 8 项 / 🟡 5 项 / ❌ 2 项。补齐 5 个 🟡 + 2 个 ❌ 是接下来的工作重心,其余只需做细节打磨。
+**总结**:15 项中 ✅ 10 项 / 🟡 4 项 / ❌ 1 项。补齐 4 个 🟡 + 1 个 ❌ 是接下来的工作重心,其余只需做细节打磨。
 
 ---
 
@@ -172,6 +172,7 @@
 | 里程碑 | 完成标志 | 预计周期(累计) | 用户验收方式 |
 |--------|----------|------------------|--------------|
 | **M0 基础设施** | PostgreSQL 后端、`/metrics` 端点、systemd 加固、hbb_common fork 接入两个 Rust 仓库 | T0 + 2 周 | `docker-compose up` 后 hbbs/hbbr 独立 metrics 端口有数据;`systemd-analyze security` 评级 ≥ OK |
+| └─ CE-M0-1 状态 | fork 维护手册已草拟(`docs/operations/hbb_common-ce.md`);`hbb_common-ce@a920d00945e1d2441b3f77b2677054cb8c3d9dd2` 已选定为 `ce/base` 基线;submodule URL 切换待运维创建 GitHub fork 后再执行 | — | 见 `docs/ai-tasks/CE-M0-1.md` §5 步骤 2–5 |
 | **M1 容易项** | API/Web 账号 MFA + 审计扩展 + WS 注册补齐 + 轻量 client builder 全部 GA | T0 + 5 周 | 后台开启 MFA → 客户端/API 登录提示输入 TOTP;后台审计页能看到文件/剪贴板事件;下载页生成的链接客户端打开即配好 server |
 | **M2 中等项** | RBAC v2 + Security Settings Sync + GeoIP Relay 全部 GA | T0 + 9 周 | 后台限制 userA 不能连 peerB → 客户端地址簿不可见且 punch 被拒;策略包推送后客户端的"禁止文件传输"开关立即变灰;多 relay 部署后控制端日志显示就近 relay |
 | **M3 重量项** | Alarm + 完整 client builder + 多 hbbs 集群(选做) | T0 + 15 周 | 模拟暴力破解 → 后台告警卡片 + 邮件;后台生成 macOS .dmg 真品牌包;两台 hbbs 后 PeerMap 共享 |
@@ -206,7 +207,7 @@
 - [ ] **CE-M1-7** rustdesk:`src/server/connection.rs` 各事件钩子补 `audit_event!(kind, payload)`;文件传输复用现有 `/api/audit/file`,剪贴板按新事件端点/视图上报。
 - [ ] **CE-M1-8** rustdesk-server:`rendezvous_server.rs::handle_listener2` 把 WS 分支接入 `handle_msg` 的 `RegisterPeer`/`RegisterPk` 处理(目前直接 return `NOT_SUPPORT`)。
 - [ ] **CE-M1-9** rustdesk-api:`http/controller/admin/client_builder.go`(轻量版):后台填写 server/key/api → 生成 `RustDesk-host=<server>,key=<base64>,api=<url>.exe` 下载链接 + 二维码 + 复制按钮。
-- [ ] **CE-M1-10** 文档:本文档 §1 矩阵把已完成项打勾,新增 `docs/operations/2fa.md`、`docs/operations/audit-events.md` 两份运维手册。
+- [x] **CE-M1-10** 文档:本文档 §1 矩阵把已完成项打勾,新增 `docs/operations/2fa.md`、`docs/operations/audit-events.md` 两份运维手册。
 
 ### Sprint 3+(M2、M3)
 后续 Sprint 在 M1 收尾、用户验收通过后再细化任务卡。

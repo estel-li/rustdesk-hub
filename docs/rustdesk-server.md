@@ -109,7 +109,7 @@ Release profile 启用 `panic=abort` 与 LTO 以最小化二进制体积。
 - IP 安全：`IP_BLOCKER`（每 IP 每分钟 ≤30 次注册，每天 ≤300 个不同 ID），`IP_CHANGES` 记录 ID-IP 变更频率（窗口 `IP_CHANGE_DUR=180s`，命中阈值后封禁 `IP_BLOCK_DUR=60s`），`PUNCH_REQS` 60s 内同 `from_ip→to_id` 去重（仅检查最近 30 条）。
 - Ed25519 签名：对 `id+pk` 签名以防中间人篡改。
 - 配置/版本：loopback 发 `ConfigureUpdate` 可热更新 `serial` 与 `rendezvous-servers`；后台线程每 24h 拉取版本，对 `SoftwareUpdate` 请求返回下载 URL。
-- 管理 CLI（仅 loopback 接入 `port-1`）：`relay-servers`、`reload-geo`、`ip-blocker`、`ip-changes`、`punch-requests`、`always-use-relay`、`test-geo`。
+- 管理 CLI（CE-M0-7 已迁移到 UDS + token）：`relay-servers`、`reload-geo`、`ip-blocker`、`ip-changes`、`punch-requests`、`always-use-relay`、`test-geo`。监听 `/run/rustdesk-server/hbbs.sock`(Linux) 或 `/tmp/rustdesk-hbbs.sock`(macOS dev),客户端首段必须送 32 字节随机 token(`/var/lib/rustdesk-server/admin.token`)。
 
 **关键文件**：`src/rendezvous_server.rs`、`src/peer.rs`、`src/database.rs`、`src/common.rs`、`src/main.rs`。
 
@@ -142,7 +142,7 @@ Release profile 启用 `panic=abort` 与 LTO 以最小化二进制体积。
 - WebSocket 通道**不支持 `RegisterPeer`/`RegisterPk`**（这两条仅在 `handle_udp`/`handle_tcp` 处理，WS 路径会返回 `NOT_SUPPORT`），WS 客户端无法独立完成注册。
 - 默认 `MAX_DATABASE_CONNECTIONS=1`，高并发注册场景成为瓶颈。
 - `ip-blocker` / `ip-changes` 仅在内存中，重启即失。
-- loopback 管理 CLI 仅以 `is_loopback()` 校验，**无任何认证**。
+- ~~loopback 管理 CLI 仅以 `is_loopback()` 校验,**无任何认证**。~~ **已修复 (CE-M0-7)**:管理 CLI 迁移到 Unix domain socket + 启动期 32 字节 token,Linux 上额外做 `SO_PEERCRED` 校验。Windows 保留 TCP loopback 但同样需要 token,严禁绑定非 loopback 地址。
 - `get_relay_server` 仅做 round-robin，地理就近选择仍是 TODO。
 - `id_ed25519` 私钥以明文落盘，权限未强制校验。
 - WebSocket 反向代理 `X-Real-IP` 头解析未做合法性验证，恶意代理可伪造 IP。
@@ -156,12 +156,12 @@ Release profile 启用 `panic=abort` 与 LTO 以最小化二进制体积。
 - 限速分层：`TOTAL_BANDWIDTH`（默认 1 Gbps）、`SINGLE_BANDWIDTH`（默认 128 Mbps）、`LIMIT_SPEED`（黑名单 IP 默认 32 Mbps）。
 - 降级：`DOWNGRADE_THRESHOLD`（默认 66%，达单连接阈值触发降速），`DOWNGRADE_START_CHECK` 控制起始检查时间。
 - 黑/阻止名单：`blacklist.txt`（限速）与 `blocklist.txt`（拒绝连接）启动时加载到内存。
-- loopback 管理 CLI（主端口本地连接）：`blacklist` / `blocklist` / `downgrade-threshold` / `downgrade-start-check` / `limit-speed` / `total-bandwidth` / `single-bandwidth` / `usage`。
+- 管理 CLI(CE-M0-7 已迁移到 UDS + token):`blacklist` / `blocklist` / `downgrade-threshold` / `downgrade-start-check` / `limit-speed` / `total-bandwidth` / `single-bandwidth` / `usage`。监听 `/run/rustdesk-server/hbbr.sock`(Linux) 或 `/tmp/rustdesk-hbbr.sock`(macOS dev)。
 
 **关键文件**：`src/relay_server.rs`、`src/hbbr.rs`。约 647 行。
 
 **对外接口**：
-- TCP `21117` — 主中继 + loopback 管理 CLI。
+- TCP `21117` — 主中继(CE-M0-7 起,管理 CLI 已迁到 UDS,不再在 21117 接受 loopback 命令)。
 - TCP `21119`（port+2）— WebSocket 中继，识别 `X-Real-IP` / `X-Forwarded-For`。
 
 **与其他模块/外部系统交互**：
@@ -195,7 +195,7 @@ Client A ── RequestRelay(uuid, key) ──▶ hbbr
 - **无法水平扩展**：多实例不共享 PEERS，配对双方必须落到同一进程。
 - 无 TLS 层加密，依赖客户端上层加密；无最大连接数 / 并发会话上限，存在 DoS 风险。
 - `DOWNGRADE` 仅基于总流量阈值，无法区分大文件传输 vs 异常流量。
-- loopback 管理 CLI 仅 `is_loopback()` 检查，**任何本机用户可改运行参数**。
+- ~~loopback 管理 CLI 仅 `is_loopback()` 检查,**任何本机用户可改运行参数**。~~ **已修复 (CE-M0-7)**:与 hbbs 同步迁移到 UDS + token,旧 21117 loopback 旁路已删除。
 - 多处 TODO/FIXME 残留，错误处理不够完善。
 
 ### 共享存储与状态（`src/peer.rs` + `src/database.rs`）
@@ -282,9 +282,9 @@ Client A ── RequestRelay(uuid, key) ──▶ hbbr
 | 端口 | 协议 | 进程 | 用途 |
 |---|---|---|---|
 | `21114` | TCP | hbbs（预期） | 内部 / Web API（axum） |
-| `21115` | TCP | hbbs | NAT 类型测试 + loopback 管理 CLI（`port-1`） |
+| `21115` | TCP | hbbs | NAT 类型测试(CE-M0-7 起,管理 CLI 已迁到 UDS,不再监听于 `port-1`) |
 | `21116` | TCP + UDP | hbbs | 主信令通道（注册/打洞/relay 请求） |
-| `21117` | TCP | hbbr | 中继 + hbbr 的 loopback 管理 CLI |
+| `21117` | TCP | hbbr | 中继(CE-M0-7 起,管理 CLI 已迁到 UDS) |
 | `21118` | TCP | hbbs | WebSocket 信令（`port+2`） |
 | `21119` | TCP | hbbr | WebSocket 中继（`port+2`） |
 
@@ -482,7 +482,7 @@ S6 启动链：`/init` → `key-secret`（oneshot，密钥准备/校验）→ `h
 
 ### 高优先级
 
-1. **关键管理接口零认证**：hbbs 的 `port-1` loopback 管理 CLI 与 hbbr 的主端口 loopback CLI 仅以 `is_loopback()` 判断信任源，本机任何用户即可改写 `relay-servers` / `always-use-relay` / `single-bandwidth` / `blacklist` 等关键参数。建议加 Unix domain socket + 文件权限 / token。
+1. ~~**关键管理接口零认证**:hbbs 的 `port-1` loopback 管理 CLI 与 hbbr 的主端口 loopback CLI 仅以 `is_loopback()` 判断信任源,本机任何用户即可改写 `relay-servers` / `always-use-relay` / `single-bandwidth` / `blacklist` 等关键参数。建议加 Unix domain socket + 文件权限 / token。~~ **已修复 (CE-M0-7)**:hbbs / hbbr 均迁移到 `admin_cli` 模块封装的 UDS + 32 字节 token,socket 文件 mode 0o660、token 文件 mode 0o640、Linux 上叠加 `SO_PEERCRED` 校验,Windows 保留 TCP loopback 但严格只允许 `127.0.0.1` / `::1` 且强制 token。运维脚本迁移:`socat - UNIX-CONNECT:/run/rustdesk-server/hbbs.sock` 并在首段追加 token,具体见 §运维 章节。
 2. **hbbr 配对无身份验证**：任何拿到 `uuid` 的攻击者都可抢先连接劫持中继通道；`licence_key` 只做明文比对。建议引入挑战-应答 / HMAC 签名 / 由 hbbs 颁发的短期 token。
 3. **密钥明文落盘且权限未强制**：`id_ed25519` 私钥以普通文件保存；Docker 环境变量注入 `KEY_PRIV` 可经 `docker inspect` 或 `/proc/$pid/environ` 泄露。建议强制 `chmod 0400`、推荐 Docker secrets / K8s Secret。
 4. **systemd 单元以 root 运行**：`User=`/`Group=` 为空，未启用 `ProtectSystem`/`NoNewPrivileges`/`ReadOnlyPaths` 等加固。建议建立专用 `rustdesk` 用户，并启用 systemd sandbox。
