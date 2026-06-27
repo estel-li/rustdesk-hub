@@ -1,0 +1,44 @@
+# profiles/postgres.yml — 把 rustdesk-api 从默认 SQLite 切到 PostgreSQL。
+# 用法:
+#   docker compose -f docker-compose.yml -f profiles/postgres.yml up -d
+# 切换数据库前先备份 ./data/api/db_v2.sqlite3,手工迁移数据(rustdesk-api 没有自动迁移工具)。
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rustdesk-postgres
+    restart: unless-stopped
+    networks: [rustdesk-net]
+    volumes:
+      - ${DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+      - ./secrets:/run/secrets:ro
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-rustdesk}
+      - POSTGRES_DB=${POSTGRES_DB:-rustdesk}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - TZ=${TZ:-Asia/Shanghai}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-rustdesk}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  rustdesk-api:
+    environment:
+      - RUSTDESK_API_GIN_DBTYPE=postgres
+      - RUSTDESK_API_GIN_DSN_FILE=/run/secrets/postgres_dsn
+    depends_on:
+      postgres:
+        condition: service_healthy
+      hbbs:
+        condition: service_started
+      hbbr:
+        condition: service_started
+    volumes:
+      - ${DATA_DIR:-./data}/api:/app/data
+      - ./secrets:/run/secrets:ro
+
+# NOTE: 密码文件机制下 GORM DSN 需要在容器内组装。
+# 推荐做法:在 secrets/ 下手写 postgres_dsn,内容如:
+#   host=postgres user=rustdesk dbname=rustdesk password=$(cat postgres_password) port=5432 sslmode=disable TimeZone=Asia/Shanghai
+# 然后 chmod 0600 secrets/postgres_dsn。

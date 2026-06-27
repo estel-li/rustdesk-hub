@@ -1,0 +1,37 @@
+# profiles/metrics.yml — 加 Prometheus + Grafana,内网抓三个 metrics 端口。
+# 用法:
+#   docker compose -f docker-compose.yml -f profiles/metrics.yml up -d
+# 暴露:
+#   - prometheus: http://${SERVER_HOST}:${PROM_PORT:-9090}
+#   - grafana   : http://${SERVER_HOST}:${GRAFANA_PORT:-3000}  (默认 admin/admin)
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rustdesk-prometheus
+    restart: unless-stopped
+    networks: [rustdesk-net]
+    ports:
+      - "${PROM_PORT:-9090}:9090"
+    volumes:
+      - ./profiles/metrics/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./profiles/metrics/data/prometheus:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rustdesk-grafana
+    restart: unless-stopped
+    networks: [rustdesk-net]
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./profiles/metrics/data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    depends_on:
+      - prometheus

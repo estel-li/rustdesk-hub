@@ -1,0 +1,15 @@
+# profiles/metrics/prometheus.yml — 内网抓三个 CE 服务的 /metrics
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: hbbs
+    static_configs:
+      - targets: ['hbbs:21120']
+  - job_name: hbbr
+    static_configs:
+      - targets: ['hbbr:21121']
+  - job_name: rustdesk-api
+    static_configs:
+      - targets: ['rustdesk-api:21115']

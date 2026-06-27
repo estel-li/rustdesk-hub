@@ -1,0 +1,16 @@
+# profiles/builder.yml — 启用 rustdesk-api Client Builder。
+# 用法:
+#   1) 把 RustDesk 官方安装包(.exe/.msi/.dmg/.AppImage/...)放到 deploy/builder/base/ 下,
+#      按 rustdesk-api/docs/api/admin/client-build.md 命名(如 rustdesk-1.4.0-x86_64.exe)。
+#   2) docker compose -f docker-compose.yml -f profiles/builder.yml up -d
+# 之后在 Web Admin -> Client Builder 里就能选基础包、签发个性化客户端。
+
+services:
+  rustdesk-api:
+    volumes:
+      - ${DATA_DIR:-./data}/api:/app/data
+      - ./secrets:/run/secrets:ro
+      - ./builder/base:/app/data/client-builder/base:ro
+    environment:
+      - RUSTDESK_API_CLIENT_BUILDER_ENABLED=true
+      - RUSTDESK_API_CLIENT_BUILDER_BASE_DIR=/app/data/client-builder/base

@@ -1,0 +1,30 @@
+# profiles/caddy/Caddyfile — 给 rustdesk-api 套 HTTPS。
+# 默认从 LE/ZeroSSL 自动签证书;邮箱来自 ACME_EMAIL,可放 .env。
+# 同站点同时承载 21118/21119 WebSocket 反代,客户端只用 443。
+#
+# 注意:
+#   - $SERVER_HOST 必须是公网可解析的域名(.env 改一下)
+#   - hbbs/hbbr 的 21116/21117 是 raw TCP+UDP,无法走 HTTP CDN,继续直连 IP/域名:port
+
+{
+    email {$ACME_EMAIL:admin@example.com}
+}
+
+{$SERVER_HOST} {
+    encode zstd gzip
+
+    # rustdesk-api 后台 + REST
+    reverse_proxy /api/* rustdesk-api:21114
+    reverse_proxy /_admin/* rustdesk-api:21114
+    reverse_proxy /swagger/* rustdesk-api:21114
+
+    # hbbs/hbbr WebSocket(给 web 客户端)
+    @ws_hbbs path /ws/id /ws/id/*
+    reverse_proxy @ws_hbbs hbbs:21118
+
+    @ws_hbbr path /ws/relay /ws/relay/*
+    reverse_proxy @ws_hbbr hbbr:21119
+
+    # 其它走 admin 静态
+    reverse_proxy rustdesk-api:21114
+}

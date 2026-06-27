@@ -1,0 +1,95 @@
+name: rustdesk-ce
+
+# 默认 core profile:hbbs + hbbr + rustdesk-api(SQLite),最小依赖。
+# 加 profile:
+#   docker compose -f docker-compose.yml -f profiles/caddy.yml up -d        # 反代 + 自动 HTTPS
+#   docker compose -f docker-compose.yml -f profiles/postgres.yml up -d     # 切 PostgreSQL
+#   docker compose -f docker-compose.yml -f profiles/metrics.yml up -d      # 加 Prometheus + Grafana
+#   docker compose -f docker-compose.yml -f profiles/builder.yml up -d      # 启用 Client Builder
+
+networks:
+  rustdesk-net:
+    driver: bridge
+
+volumes:
+  hbbs-admin-sock: {}    # CE-M0-7:UDS 管理通道,docker exec 调用
+  hbbr-admin-sock: {}
+
+services:
+  hbbs:
+    image: ${IMAGE_NS:-rustdesk-ce}/hbbs:${IMAGE_TAG:-dev}
+    container_name: hbbs
+    restart: unless-stopped
+    networks: [rustdesk-net]
+    ports:
+      - "${HBBS_NAT_PORT:-21115}:21115"
+      - "${HBBS_TCP_PORT:-21116}:21116"
+      - "${HBBS_UDP_PORT:-21116}:21116/udp"
+      - "${HBBS_WS_PORT:-21118}:21118"
+      # 21120 metrics 故意不映射到 host,内网 prometheus 通过 service name 抓
+    volumes:
+      - ${DATA_DIR:-./data}/server:/var/lib/rustdesk-server
+      - hbbs-admin-sock:/run/rustdesk-server
+      - ./secrets:/run/secrets:ro
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - RELAY=hbbr:21117
+      # CE-M0-7 UDS 管理通道(已是 Dockerfile 默认值,显式标注便于排障)
+      - RUSTDESK_SERVER_ADMIN_SOCKET=/run/rustdesk-server/hbbs.sock
+      - RUSTDESK_SERVER_ADMIN_TOKEN_FILE=/run/secrets/admin_token
+      # CE-M0-3 metrics
+      - RUSTDESK_SERVER_METRICS_BIND=${HBBS_METRICS_BIND:-0.0.0.0:21120}
+    command:
+      - -r
+      - hbbr:21117
+    depends_on:
+      - hbbr
+
+  hbbr:
+    image: ${IMAGE_NS:-rustdesk-ce}/hbbr:${IMAGE_TAG:-dev}
+    container_name: hbbr
+    restart: unless-stopped
+    networks: [rustdesk-net]
+    ports:
+      - "${HBBR_TCP_PORT:-21117}:21117"
+      - "${HBBR_WS_PORT:-21119}:21119"
+      # 21121 metrics 同样不映射
+    volumes:
+      - ${DATA_DIR:-./data}/server:/var/lib/rustdesk-server
+      - hbbr-admin-sock:/run/rustdesk-server
+      - ./secrets:/run/secrets:ro
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - RUSTDESK_SERVER_ADMIN_SOCKET=/run/rustdesk-server/hbbr.sock
+      - RUSTDESK_SERVER_ADMIN_TOKEN_FILE=/run/secrets/admin_token
+      - RUSTDESK_SERVER_METRICS_BIND=${HBBR_METRICS_BIND:-0.0.0.0:21121}
+
+  rustdesk-api:
+    image: ${IMAGE_NS:-rustdesk-ce}/api:${IMAGE_TAG:-dev}
+    container_name: rustdesk-api
+    restart: unless-stopped
+    networks: [rustdesk-net]
+    ports:
+      - "${API_PORT:-21114}:21114"
+      # 21115 metrics 同样不映射
+    volumes:
+      - ${DATA_DIR:-./data}/api:/app/data
+      - ./secrets:/run/secrets:ro
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      # ---- 客户端可见的连接参数(下发到客户端的 Configuration String 内)----
+      - RUSTDESK_API_RUSTDESK_ID_SERVER=${SERVER_HOST:-127.0.0.1}:${HBBS_TCP_PORT:-21116}
+      - RUSTDESK_API_RUSTDESK_RELAY_SERVER=${SERVER_HOST:-127.0.0.1}:${HBBR_TCP_PORT:-21117}
+      - RUSTDESK_API_RUSTDESK_API_SERVER=http://${SERVER_HOST:-127.0.0.1}:${API_PORT:-21114}
+      - RUSTDESK_API_RUSTDESK_KEY=${RUSTDESK_PUB_KEY:-}
+      # ---- CE-M1-1 / M1-3 secret 文件挂载 ----
+      - RUSTDESK_API_MFA_KEY_FILE=/run/secrets/mfa_encryption_key
+      - RUSTDESK_API_JWT_KEY_FILE=/run/secrets/jwt_signing_key
+      # ---- CE-M0-4 metrics ----
+      - RUSTDESK_API_METRICS_BIND=${API_METRICS_BIND:-0.0.0.0:21115}
+      # ---- 后台默认账号(只在数据库为空时初始化)----
+      - RUSTDESK_API_ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - RUSTDESK_API_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+    depends_on:
+      - hbbs
+      - hbbr

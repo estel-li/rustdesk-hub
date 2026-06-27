@@ -1,0 +1,15 @@
+# 本地配置
+.env
+.env.local
+
+# 秘密(由 scripts/gen-secrets.sh 生成)
+secrets/*
+!secrets/.gitkeep
+
+# 持久化数据
+data/
+
+# Caddy 自动证书 / Prometheus 数据等
+profiles/caddy/data/
+profiles/caddy/config/
+profiles/metrics/data/

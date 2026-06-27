@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1.6
+#
+# 编译 rustdesk-api(含 CE-M0-4 / M1-1..7 / M1-9 改造)并产出 thin runtime image。
+# 用法:docker build -f deploy/Dockerfile.api -t rustdesk-ce/api:dev rustdesk-api/
+
+ARG GO_VERSION=1.22
+
+# ---- 编译阶段 ----
+FROM golang:${GO_VERSION}-bookworm AS builder
+
+# CGO 必需(gorm sqlite 驱动)+ swag(可选,docs 已 commit 时也跑一遍以保新)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc \
+        libc6-dev \
+        libsqlite3-dev \
+        git \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+# build.sh 在 release/apimain 输出二进制,这里照搬关键步骤,但不重复 swag(docs/api/ docs/admin/ 已 commit)
+ENV CGO_ENABLED=1 GOOS=linux
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -ldflags "-s -w" -o /out/apimain ./cmd
+
+# ---- runtime ----
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        tzdata \
+        tini \
+        adduser \
+        curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r -g 1000 rustdesk \
+    && useradd -r -u 1000 -g rustdesk -d /app -s /usr/sbin/nologin rustdesk \
+    && mkdir -p /app/data /app/runtime \
+    && chown -R rustdesk:rustdesk /app
+
+WORKDIR /app
+
+COPY --from=builder /out/apimain /app/apimain
+COPY --from=builder /src/conf /app/conf
+COPY --from=builder /src/resources /app/resources
+COPY --from=builder /src/docs /app/docs
+
+RUN chown -R rustdesk:rustdesk /app
+
+USER rustdesk:rustdesk
+
+# 21114 API/Web、21115 metrics(CE-M0-4,默认 loopback)
+EXPOSE 21114 21115
+
+VOLUME ["/app/data"]
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:21114/api/health || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/apimain"]
