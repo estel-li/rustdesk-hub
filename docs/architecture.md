@@ -346,7 +346,7 @@ flowchart TB
 
 ### 7.1 Rendezvous Protocol（protobuf）
 
-定义在 `libs/hbb_common/protos/rendezvous.proto`（hbb_common 是 git submodule，三个项目共用同一份）。所有消息封装在 `RendezvousMessage` oneof 中，常见类型：
+定义在 `libs/hbb_common/protos/rendezvous.proto`（hbb_common 是 `rustdesk` 与 `rustdesk-server` 共享的 git submodule；`rustdesk-api` 不直接引用该 submodule，只需与协议语义和 HTTP DTO 对齐）。所有消息封装在 `RendezvousMessage` oneof 中，常见类型：
 
 | 消息 | 方向 | 用途 |
 |------|------|------|

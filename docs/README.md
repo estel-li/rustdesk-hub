@@ -64,6 +64,7 @@ ASCII 备选视图：
 - [rustdesk-server](./rustdesk-server.md) — 官方自托管**信令 (`hbbs`) + 中继 (`hbbr`)** 服务，Ed25519 身份验证 + SQLite 持久化 + 可选带宽治理，支持裸机 / Docker / systemd / Kubernetes 部署。
 - [rustdesk-api](./rustdesk-api.md) — Go (Gin + GORM) 编写的**第三方 API + Web 管理后台 + Web Client**，兼容官方 Pro API，提供用户体系、地址簿、审计、LDAP/OAuth/OIDC 等企业级能力。
 - [架构总览](./architecture.md) — 三个项目协同工作的端口、协议、数据流与典型部署拓扑。
+- [AI 执行开发规划](./ai-development-plan.md) — 面向后续 AI agent 的施工手册，拆解 M0/M1 任务、约束、验收矩阵与禁止事项。
 
 ## 快速上手建议
 
