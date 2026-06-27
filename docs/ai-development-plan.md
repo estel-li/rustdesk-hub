@@ -4,6 +4,8 @@
 > 上游规划:以 `docs/upgrade-plan.md` 为产品/路线图来源。
 > 工作范围:`rustdesk-server/`、`rustdesk-api/`、`rustdesk/` 三个项目就地修改。
 > 第一目标:先完成 M0 + M1,并保持老客户端/老服务端兼容。
+>
+> **实施级规格**:本规划的 16 个 CE 任务卡已逐个细化为可直接交付的实施规格,位于 `docs/ai-tasks/`。接到任何 CE-Mx-y 任务时,先读 `docs/ai-tasks/README.md`(索引 + 跨任务约定)与对应的 `docs/ai-tasks/CE-Mx-y.md`,再回到本文件查阶段全局约束(§1 总原则 / §7 验证矩阵 / §9 禁止事项)。
 
 ---
 
