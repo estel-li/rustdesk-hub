@@ -1,0 +1,39 @@
+# 与 Dockerfile.api 同名 + .dockerignore,BuildKit 自动识别。
+# 路径相对 build context 根(=rustdesk-api/)。
+
+# Go / 本地编译产物
+release/
+bin/
+tmp/
+*.exe
+*.test
+*.out
+
+# Vendor 缓存(go mod download 会重新拉)
+vendor/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# CI / 本地脚本
+.github/
+Dockerfile*
+docker-compose*.yml
+build.sh
+
+# 数据 / 运行时
+data/
+runtime/
+*.db
+*.sqlite*
+
+# 测试输出
+coverage.*
+*.log

@@ -29,6 +29,19 @@ if [[ -z "$PUB_KEY" ]]; then
   exit 1
 fi
 
+# 从 rustdesk-api 容器日志里抓首次启动时打出的随机 admin 密码。
+# 上游 apimain.Migrate 只在 users 表为空时打一次,所以只有首次启动能抓到;
+# 后续改密走 Web Admin 即可。
+ADMIN_PWD="$(docker compose logs rustdesk-api 2>/dev/null \
+  | grep -oE 'Admin Password Is: *\S+' \
+  | tail -n1 \
+  | awk '{print $NF}' || true)"
+if [[ -z "$ADMIN_PWD" ]]; then
+  ADMIN_PWD_HINT="(已不在日志中,改密走 Web Admin;或 docker compose down + 删 ./data/api/db_v2.sqlite3 重新初始化)"
+else
+  ADMIN_PWD_HINT=""
+fi
+
 # RustDesk 客户端 Configuration String:base64( "host=...,key=...,api=..." )
 # 与 rustdesk-api 下发逻辑一致
 CONF_RAW="host=${SERVER_HOST}:${HBBS_TCP_PORT},key=${PUB_KEY},api=http://${SERVER_HOST}:${API_PORT}"
@@ -49,8 +62,9 @@ API Server  : http://${SERVER_HOST}:${API_PORT}
 Public Key  : ${PUB_KEY}
 
 Web Admin   : http://${SERVER_HOST}:${API_PORT}/_admin/
-              默认账号: ${ADMIN_USERNAME:-admin} / ${ADMIN_PASSWORD:-admin}
-              (首次登录后改密码!)
+              用户名 : admin
+              首次密码: ${ADMIN_PWD:-（未抓到）} ${ADMIN_PWD_HINT}
+              ⚠ 首次登录后立刻改密!
 
 客户端 Configuration String(粘贴到客户端 → ID/Relay 服务器 → 导入):
 ${CONF_B64}

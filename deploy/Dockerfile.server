@@ -11,6 +11,7 @@ FROM rust:1.78-slim-bookworm AS builder
 
 # CE-M0-2 引入了 sqlx + postgres feature,需要 pkg-config / libssl-dev / libpq-dev
 # CE 全部 build deps:protoc(hbb_common build.rs)、cmake/clang(部分上游 crate)
+# make + g++ 是 libsodium-sys 自带的 ./configure && make 流程所必需,slim 镜像不带
 RUN apt-get update && apt-get install -y --no-install-recommends \
         pkg-config \
         libssl-dev \
@@ -18,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         protobuf-compiler \
         cmake \
         clang \
+        make \
+        g++ \
         git \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*

@@ -1,0 +1,37 @@
+# 与 Dockerfile.server 同名 + .dockerignore,BuildKit 自动识别。
+# 路径相对 build context 根(=rustdesk-server/)。
+# 目的:把 4GB+ 的本地 cargo 产物 / IDE 缓存 / git 历史挡在 build context 外。
+
+# Cargo / Rust 产物
+target/
+**/target/
+**/*.rlib
+**/*.rmeta
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# CI / 本地脚本(不参与镜像)
+.github/
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+
+# 文档 / 示例(rustdesk-server 自带 docs/、ui/,镜像里用不上)
+docs/
+ui/
+README*.md
+LICENSE*
+
+# 测试 / 临时
+**/*.log
+**/tmp/
+**/tmp_*

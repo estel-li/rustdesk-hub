@@ -96,11 +96,14 @@ docker compose exec hbbs sh -c '\
 SERVER_HOST=rustdesk.example.com    # 客户端要解析的地址(内网就填 IP / 127.0.0.1)
 HBBS_TCP_PORT=21116
 API_PORT=21114
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=please-change-me     # 首次启动写库,后续改要走 Web Admin
 ```
 
 改完后 `docker compose up -d` 即可。`RUSTDESK_PUB_KEY` 由 `init.sh` 自动写入,**别**手改。
+
+> Web Admin 首次密码:**不是** `admin/admin`,而是 apimain 在 users 表为空时随机生成的 8 位串,
+> 写到 `data/api/db_v2.sqlite3` 同时打到日志。`./scripts/show-info.sh` 会自动从日志里抓出来打印;
+> 也能直接 `docker compose logs rustdesk-api | grep 'Admin Password Is'`。
+> 进后台后立刻改密 + 开 MFA(CE-M1-2/M1-5)。
 
 ---
 
@@ -217,7 +220,7 @@ docker compose exec rustdesk-api /app/apimain reset-admin --user admin --passwor
 
 ## 安全清单(上线前 5 项)
 
-1. **改默认 admin 密码**(`.env` 里 `ADMIN_PASSWORD=`,首次启动后立刻进后台改一次)。
+1. **改默认 admin 密码**(首次启动 apimain 会随机生成 8 位密码并写到日志/数据库,登录后立刻进后台改一次)。
 2. **备份 `data/server/id_ed25519` 和 `secrets/`**(整个 `deploy/secrets/` tar 一份,异地)。
 3. **公网部署套 Caddy**(`profiles/caddy.yml`),21114 不要直接暴露。
 4. **MFA 默认关**;在后台按用户/全局打开后才生效(CE-M1-1)。

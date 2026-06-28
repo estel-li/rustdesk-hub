@@ -87,9 +87,9 @@ services:
       - RUSTDESK_API_JWT_KEY_FILE=/run/secrets/jwt_signing_key
       # ---- CE-M0-4 metrics ----
       - RUSTDESK_API_METRICS_BIND=${API_METRICS_BIND:-0.0.0.0:21115}
-      # ---- 后台默认账号(只在数据库为空时初始化)----
-      - RUSTDESK_API_ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - RUSTDESK_API_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      # NOTE: 上游 apimain 没有读 ADMIN_USERNAME / ADMIN_PASSWORD 环境变量的代码,
+      # 首次启动时会自动生成 8 位随机密码,写库 + 打 INFO 日志。
+      # 用 `./scripts/show-info.sh` 或 `docker compose logs rustdesk-api | grep 'Admin Password Is'` 取。
     depends_on:
       - hbbs
       - hbbr
