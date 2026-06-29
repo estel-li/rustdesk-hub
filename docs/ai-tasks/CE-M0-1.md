@@ -37,7 +37,7 @@
 
 | 路径 | 动作 | 行数估计 | 说明 |
 |------|------|----------|------|
-| `rustdesk-server/.gitmodules` | 修改 | 1 行 | `url` 改为 `https://github.com/<org>/hbb_common-ce`(建议命名,可调整) |
+| `rustdesk-server/.gitmodules` | 修改 | 1 行 | `url` 改为 `https://github.com/estel-li/hbb_common-ce`(建议命名,可调整) |
 | `rustdesk-server/libs/hbb_common`(submodule 指针) | 修改 | git index 1 项 | 重新指向 fork 上 `ce/base` 的合并 commit |
 | `rustdesk/.gitmodules` | 修改 | 1 行 | 同上,URL 改为同一 fork |
 | `rustdesk/libs/hbb_common`(submodule 指针) | 修改 | git index 1 项 | 同上,指向 `ce/base` 同一 commit |
@@ -54,7 +54,7 @@
 本任务**不**改 protobuf / Rust struct / Go struct / SQL / HTTP / 配置项。仅有的契约性产物是 fork 仓库自身的元信息。
 
 ### Fork 仓库命名约定(建议命名,可调整)
-- GitHub org:沿用用户后续推送 fork 时的 `*-ce` 命名,例如 `https://github.com/<your-org>/hbb_common-ce`。
+- GitHub org:沿用用户后续推送 fork 时的 `*-ce` 命名,例如 `https://github.com/estel-li/hbb_common-ce`。
 - 默认分支:`ce/base` —— 由官方 `a920d00945e1d2441b3f77b2677054cb8c3d9dd2` 出发,零改动 fast-forward。
 - 备用分支:`upstream/master` —— 镜像官方 `rustdesk/hbb_common@master`,便于后续 cherry-pick。
 - 标签:打 `ce-base-v0` 标签固定本次合并基线,后续 M0/M1/M2 protocol 改动各开 `ce/feat-*` 分支并向 `ce/base` 提交 PR。
@@ -66,7 +66,7 @@
 ```ini
 [submodule "libs/hbb_common"]
     path = libs/hbb_common
-    url = https://github.com/<your-org>/hbb_common-ce
+    url = https://github.com/estel-li/hbb_common-ce
     branch = ce/base    # 新增,便于 CI 跑 `git submodule update --remote` 自检
 ```
 > `branch = ce/base` 行是新增项。官方原始 `.gitmodules` 没有该行(参见 `rustdesk-server/.gitmodules:1-4`)。可选追加,主用途是后续 CI lint 校验 submodule 指针在 `ce/base` 上。
@@ -82,7 +82,7 @@
    - `git -C hbb_common-ce-src checkout -b upstream/master master`
    - `git -C hbb_common-ce-src checkout -b ce/base a920d00945e1d2441b3f77b2677054cb8c3d9dd2`(选 `a920d00`,理由见 §2 不对称片段说明)
    - `git -C hbb_common-ce-src tag ce-base-v0`
-   - `git -C hbb_common-ce-src remote add ce git@github.com:<your-org>/hbb_common-ce.git`
+   - `git -C hbb_common-ce-src remote add ce git@github.com:estel-li/hbb_common-ce.git`
    - `git -C hbb_common-ce-src push ce upstream/master ce/base ce-base-v0`
    - 记录 `CE_BASE_SHA = a920d00945e1d2441b3f77b2677054cb8c3d9dd2`(等价于 `ce/base` HEAD)。
 4. **切换 `rustdesk-server` 的 submodule URL 与 pin**:
@@ -196,3 +196,25 @@ cd -
 - [ ] `docs/upgrade-plan.md` §6 "M0 基础设施" 行追加 "hbb_common-ce@`<CE_BASE_SHA>` 已接入"。
 - [ ] 所有提交信息以 `[CE-M0-1]` 前缀。
 - [ ] 在 `docs/ai-development-plan.md` 的 CE-M0-1 任务卡末尾追加 "状态: 完成 (commit `<hash>`)"。
+
+---
+
+## 11. 完成记录 (2026-06-29)
+
+**实际执行偏差(已记录,不阻塞验收):**
+
+1. **官方默认分支是 `main`,不是 `master`**:任务卡 §3/§4/§5/§7 中所有 `upstream/master` 应理解为 `upstream/main`(官方 `rustdesk/hbb_common` 已迁移)。fork 上实际推的镜像分支名为 `upstream/main`。`docs/operations/hbb_common-ce.md` §1/§3/§6 已同步修正。
+2. **`rustdesk-server/libs/hbb_common` 实测 pin 是 `2c6c129`,不是任务卡 §2 写的 `83419b6`**:`2c6c129` 是 estel 2026-06-29 提交的纯格式化补丁(src/proxy.rs -1 空行 / src/tcp.rs import 顺序 + 函数签名换行,功能零变化),基于 `83419b6`,**不在 a920d00 链上**。决策:把该 commit 单独推到 fork 的 `ce/feat-rustdesk-server-fmt` 分支保留,`ce/base` 维持 `a920d00` 零改动,两个 Rust 仓 pin 一律重定向到 `a920d00`。
+3. **fork 仓库由用户在 GitHub UI 手动创建**(空仓),AI agent 完成了:推 `ce/base`、`upstream/main`、`ce-base-v0` tag、`ce/feat-rustdesk-server-fmt` 共 4 个 ref。
+
+**DoD 实际状态:**
+
+- ✅ fork `https://github.com/estel-li/hbb_common-ce` 含 `ce/base`(a920d00)、`upstream/main`(a920d00)、`ce-base-v0` tag、`ce/feat-rustdesk-server-fmt`(2c6c129)。
+- ✅ `rustdesk-server/.gitmodules` URL 切到 fork,加了 `branch = ce/base`;pin 从 `2c6c129` 重定向到 `a920d00`。
+- ✅ `rustdesk/.gitmodules` URL 切到 fork,加了 `branch = ce/base`;pin 维持 `a920d00`(本来就是)。
+- ✅ `git -C rustdesk-api submodule status` 仍为空。
+- ✅ §7 验证命令 1–4 通过(`PINS ALIGNED: a920d00945e1d2441b3f77b2677054cb8c3d9dd2`)。
+- ⏳ §7 验证命令 5–6 (`cargo check`):提交前在 dev 机上跑;Linux CI 跑 `--all-features` 是后续追加。
+- ⏳ GitHub UI 上 fork 的默认分支需手工切到 `ce/base`,branch protection 需手工开。
+
+**状态: 完成 (commit 待提交后回填)**。

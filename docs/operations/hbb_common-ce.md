@@ -6,10 +6,11 @@
 
 | 项目 | 取值 |
 |------|------|
-| Fork 仓库(建议命名) | `https://github.com/<your-org>/hbb_common-ce` |
+| Fork 仓库(建议命名) | `https://github.com/estel-li/hbb_common-ce` |
 | 上游 | `https://github.com/rustdesk/hbb_common` |
 | 默认分支 | `ce/base`,由官方 `a920d00945e1d2441b3f77b2677054cb8c3d9dd2` 出发,零改动 fast-forward |
-| 上游镜像分支 | `upstream/master`,镜像官方 `rustdesk/hbb_common@master` |
+| 上游镜像分支 | `upstream/main`,镜像官方 `rustdesk/hbb_common@main`(官方默认分支已从 `master` 迁至 `main`) |
+| 拓展分支 | `ce/feat-rustdesk-server-fmt`,保留 estel 在 2026-06-29 提交的 `2c6c129`(纯格式化,基于 `83419b6`);不入 `ce/base`,后续如需可 cherry-pick |
 | 基线 tag | `ce-base-v0`,固定本次合并基线 |
 | Branch protection | `ce/base` 必须开启 require PR + require 1 review;严禁外部贡献者直接 push |
 | 可见性 | 默认 Public(同上游 AGPL);如设为 Private,需在 CI/开发者机器配置 HTTPS PAT 或 SSH key,否则 `git submodule update` 会以 403 失败 |
@@ -25,25 +26,25 @@
 ## 3. 首次初始化(需人工执行,AI agent 无法代办)
 
 ```bash
-# 3.1 在 GitHub 上新建空仓 <your-org>/hbb_common-ce(Public,AGPL 协议)
+# 3.1 在 GitHub 上新建空仓 estel-li/hbb_common-ce(Public,AGPL 协议)
 #     - 关闭 GitHub Actions 默认权限直至运维明确开启
-#     - 开启 branch protection: ce/base 与 upstream/master
+#     - 开启 branch protection: ce/base 与 upstream/main
 
 # 3.2 本地准备源(在 repo root 之外的 scratch 目录)
 cd /tmp
 git clone https://github.com/rustdesk/hbb_common hbb_common-ce-src
 cd hbb_common-ce-src
 
-# 3.3 建立两条分支
-git checkout -b upstream/master master
+# 3.3 建立两条分支(注意:官方默认分支是 main,不是 master)
+git checkout -b upstream/main main
 git checkout -b ce/base a920d00945e1d2441b3f77b2677054cb8c3d9dd2
 
 # 3.4 打基线 tag
 git tag ce-base-v0
 
 # 3.5 推送到 fork
-git remote add ce git@github.com:<your-org>/hbb_common-ce.git
-git push ce upstream/master ce/base ce-base-v0
+git remote add ce https://github.com/estel-li/hbb_common-ce
+git push ce upstream/main ce/base ce-base-v0
 ```
 
 完成后向 PR 评论里贴出 `CE_BASE_SHA` 与 fork URL,作为 CE-M0-1 验收凭据。
@@ -54,7 +55,7 @@ git push ce upstream/master ce/base ce-base-v0
 
 ```bash
 REPO=rustdesk-server   # 第二次跑时换成 rustdesk
-ORG=<your-org>
+ORG=estel-li
 
 # 4.1 修改 .gitmodules
 git -C $REPO config -f .gitmodules submodule.libs/hbb_common.url \
@@ -106,14 +107,14 @@ test "$SS" = "$SC" && echo "PINS ALIGNED: $SS" || { echo "MISMATCH: $SS vs $SC";
 ```bash
 cd /tmp/hbb_common-ce-src
 git fetch origin                                 # 拉 fork
-git fetch https://github.com/rustdesk/hbb_common master:upstream/master-new
+git fetch https://github.com/rustdesk/hbb_common main:upstream/main-new
 
 # 6.1 更新镜像分支(纯 fast-forward)
-git checkout upstream/master
-git merge --ff-only upstream/master-new
-git push origin upstream/master
+git checkout upstream/main
+git merge --ff-only upstream/main-new
+git push origin upstream/main
 
-# 6.2 把 upstream master 上的具体 commit 拣到 ce/base
+# 6.2 把 upstream main 上的具体 commit 拣到 ce/base
 git checkout ce/base
 git cherry-pick <upstream-sha>
 # 解决冲突后 git cherry-pick --continue;不要 squash,保留作者信息
@@ -131,7 +132,7 @@ git push origin HEAD:refs/heads/ce/feat-<topic>
 
 ```bash
 git -C $REPO config -f .gitmodules submodule.libs/hbb_common.url \
-    https://github.com/<your-org>/hbb_common-ce
+    https://github.com/estel-li/hbb_common-ce
 git -C $REPO submodule sync libs/hbb_common
 grep -A2 hbb_common $REPO/.git/config   # 确认 url 已被 sync 进来
 git -C $REPO submodule update --init --recursive libs/hbb_common
@@ -203,6 +204,11 @@ test "$SS" = "$SC" && echo "PINS ALIGNED: $SS" || { echo "MISMATCH: $SS vs $SC";
 
 ## 10. 当前状态
 
-- 任务卡 CE-M0-1 §5 步骤 2–3 需要在 GitHub 上创建 fork 并推送分支;该动作必须由具备 GitHub 写权限的运维人员手工执行,AI agent 无法代办。
-- 在运维完成 §3 后,需回到本文档 §4 跑两个 Rust 仓库的 URL 切换与 pin 重定向,再跑 §8 验收。
-- 完成后请在 `docs/upgrade-plan.md` §6 M0 行与 `docs/ai-development-plan.md` 的 CE-M0-1 任务卡末尾追加 `状态: 完成 (commit <hash>)`。
+- ✅ 完成 (2026-06-29):
+  - fork `https://github.com/estel-li/hbb_common-ce` 已建好,含 `ce/base`、`upstream/main`、`ce-base-v0` tag(均指向 `a920d00`)。
+  - 同时保留了 `ce/feat-rustdesk-server-fmt` 分支(`2c6c129`,estel 本人提交的格式化补丁,基于 `83419b6`,**不在 ce/base 链上**;后续如需可 cherry-pick)。
+  - `rustdesk` 与 `rustdesk-server` 两仓的 `.gitmodules` URL 已切到 fork,`branch = ce/base` 字段已加,submodule pin 统一为 `a920d00` = `CE_BASE_SHA`。
+  - 任务卡 §7 验证命令 1–4 与 §8 验收脚本 1–4 通过。
+- ⏳ 待办:
+  - GitHub UI 上把 `hbb_common-ce` 的默认分支显式设为 `ce/base`(目前 HEAD 已经自动落在 ce/base,但 branch protection 仍需手动开)。
+  - `cargo check`(§7 命令 5–6)在 macOS dev 机上需要本地有 protoc 与 X11/Wayland headers,首次跑会慢;CI Linux runner 上跑 `--all-features` 才是最终验收。

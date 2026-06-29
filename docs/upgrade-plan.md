@@ -172,7 +172,7 @@
 | 里程碑 | 完成标志 | 预计周期(累计) | 用户验收方式 |
 |--------|----------|------------------|--------------|
 | **M0 基础设施** | PostgreSQL 后端、`/metrics` 端点、systemd 加固、hbb_common fork 接入两个 Rust 仓库 | T0 + 2 周 | `docker-compose up` 后 hbbs/hbbr 独立 metrics 端口有数据;`systemd-analyze security` 评级 ≥ OK |
-| └─ CE-M0-1 状态 | fork 维护手册已草拟(`docs/operations/hbb_common-ce.md`);`hbb_common-ce@a920d00945e1d2441b3f77b2677054cb8c3d9dd2` 已选定为 `ce/base` 基线;submodule URL 切换待运维创建 GitHub fork 后再执行 | — | 见 `docs/ai-tasks/CE-M0-1.md` §5 步骤 2–5 |
+| └─ CE-M0-1 状态 | ✅ 完成 (2026-06-29):fork `https://github.com/estel-li/hbb_common-ce` 已接入两个 Rust 仓库,统一 pin = `a920d00945e1d2441b3f77b2677054cb8c3d9dd2`(=`ce/base` HEAD = `ce-base-v0` tag);estel 的格式化补丁 `2c6c129` 保留在 fork 的 `ce/feat-rustdesk-server-fmt` 分支但**不入** `ce/base`。 | — | 见 `docs/ai-tasks/CE-M0-1.md` §11 完成记录 |
 | **M1 容易项** | API/Web 账号 MFA + 审计扩展 + WS 注册补齐 + 轻量 client builder 全部 GA | T0 + 5 周 | 后台开启 MFA → 客户端/API 登录提示输入 TOTP;后台审计页能看到文件/剪贴板事件;下载页生成的链接客户端打开即配好 server |
 | **M2 中等项** | RBAC v2 + Security Settings Sync + GeoIP Relay 全部 GA | T0 + 9 周 | 后台限制 userA 不能连 peerB → 客户端地址簿不可见且 punch 被拒;策略包推送后客户端的"禁止文件传输"开关立即变灰;多 relay 部署后控制端日志显示就近 relay |
 | **M3 重量项** | Alarm + 完整 client builder + 多 hbbs 集群(选做) | T0 + 15 周 | 模拟暴力破解 → 后台告警卡片 + 邮件;后台生成 macOS .dmg 真品牌包;两台 hbbs 后 PeerMap 共享 |

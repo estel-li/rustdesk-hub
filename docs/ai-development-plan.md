@@ -122,7 +122,7 @@ git -C rustdesk-api submodule status
 
 最后一条允许为空,但文档必须说明这是预期。
 
-状态: 进行中(部分完成,2026-06-27)。fork 维护手册已草拟(`docs/operations/hbb_common-ce.md`),`CE_BASE_SHA = a920d00945e1d2441b3f77b2677054cb8c3d9dd2` 已选定为 `ce/base` 基线;**两仓库 `.gitmodules` URL 切换 pending**——必须由具备 GitHub 写权限的运维人员先按运维手册 §3 创建 `<org>/hbb_common-ce` 仓库并推送 `ce/base @ a920d00` 与 `upstream/master`、`ce-base-v0` tag,再回到任务卡 §5 步骤 4–5 完成 URL 切换与 pin 重定向。
+状态: ✅ 完成 (2026-06-29)。fork `https://github.com/estel-li/hbb_common-ce` 已含 `ce/base`(`a920d00`)、`upstream/main`(注:官方默认分支已是 `main` 非 `master`)、`ce-base-v0` tag、`ce/feat-rustdesk-server-fmt`(保留 estel 的 `2c6c129` 格式化补丁,不入 ce/base)。两仓库 `.gitmodules` URL 已切到 fork、加 `branch = ce/base`,submodule pin 统一为 `CE_BASE_SHA = a920d00945e1d2441b3f77b2677054cb8c3d9dd2`。详见 `docs/ai-tasks/CE-M0-1.md` §11 完成记录。
 
 ### CE-M0-2 hbbs PostgreSQL 后端
 
