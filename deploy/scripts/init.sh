@@ -50,13 +50,36 @@ else
   echo "==> skip docker build"
 fi
 
+# ---- 3.5. 准备数据目录 + 修正 UID ----
+# 容器内 hbbs/hbbr/api 都以 UID 1000 (rustdesk) 跑。Linux bind mount 不会
+# 自动 remap UID,host 目录如果不是 1000 拥有,容器内进程写不进去
+# (典型症状:"unable to open database file" / "Failed to create directory")。
+# macOS docker desktop 透明 remap,这步等于 no-op。
+DATA_DIR_HOST="$(grep -E '^DATA_DIR=' .env | cut -d= -f2- || true)"
+DATA_DIR_HOST="${DATA_DIR_HOST:-./data}"
+mkdir -p "${DATA_DIR_HOST}/server" "${DATA_DIR_HOST}/api"
+
+if [[ "$(uname)" == "Linux" ]]; then
+  CURRENT_OWNER="$(stat -c '%u' "${DATA_DIR_HOST}" 2>/dev/null || echo 0)"
+  if [[ "$CURRENT_OWNER" != "1000" ]]; then
+    echo "==> ${DATA_DIR_HOST}/ 当前 owner=${CURRENT_OWNER},需要 chown 到 1000:1000"
+    if [[ "$(id -u)" == "0" ]]; then
+      chown -R 1000:1000 "${DATA_DIR_HOST}"
+    elif command -v sudo >/dev/null; then
+      sudo chown -R 1000:1000 "${DATA_DIR_HOST}"
+    else
+      echo "❌ 需要 root 权限 chown ${DATA_DIR_HOST}/ 到 1000:1000,请手动执行:" >&2
+      echo "   sudo chown -R 1000:1000 ${DATA_DIR_HOST}" >&2
+      exit 1
+    fi
+  fi
+fi
+
 # ---- 4. 阶段 A:先起 hbbs/hbbr ----
 echo "==> phase A: start hbbs + hbbr"
 docker compose up -d hbbs hbbr
 
-# 等 hbbs 写出 id_ed25519.pub
-DATA_DIR_HOST="$(grep -E '^DATA_DIR=' .env | cut -d= -f2- || true)"
-DATA_DIR_HOST="${DATA_DIR_HOST:-./data}"
+# 等 hbbs 写出 id_ed25519.pub(DATA_DIR_HOST 在 3.5 步已解析)
 KEY_FILE="${DATA_DIR_HOST}/server/id_ed25519.pub"
 
 echo "==> wait for $KEY_FILE"
