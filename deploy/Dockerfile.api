@@ -85,7 +85,9 @@ EXPOSE 21114 21115
 
 VOLUME ["/app/data"]
 
+# /api/version 是 Go 层固定路由(返回 {"code":0,"data":"v..."}),能同时验证 apimain 进程 + Gin router;
+# 上游目前没有 /api/health 端点,CE-M0-4 落地后可换回更专门的健康路由。
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:21114/api/health || exit 1
+  CMD curl -fsS http://127.0.0.1:21114/api/version || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/apimain"]
