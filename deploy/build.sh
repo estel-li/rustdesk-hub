@@ -58,11 +58,18 @@ for t in "${targets[@]}"; do
       ;;
     api|rustdesk-api)
       # api 的 Dockerfile 不用 multi-target,直接 build 整个文件
+      # admin 前端走 BuildKit named context,从根目录 rustdesk-api-web/ 注入
+      if [[ ! -f "$REPO_ROOT/rustdesk-api-web/package.json" ]]; then
+        echo "error: $REPO_ROOT/rustdesk-api-web/package.json not found." >&2
+        echo "       请先 clone rustdesk-api-web 到根目录(参考 deploy/README.md)。" >&2
+        exit 1
+      fi
       echo "==> building $NS/api:$IMAGE_TAG (platform=$PLATFORM, ctx=rustdesk-api/)"
       buildx_args=(
         --file "$DEPLOY_DIR/Dockerfile.api"
         --tag "$NS/api:$IMAGE_TAG"
         --platform "$PLATFORM"
+        --build-context "api-web=$REPO_ROOT/rustdesk-api-web"
       )
       if [[ "$PUSH" == "1" ]]; then buildx_args+=(--push); else buildx_args+=(--load); fi
       ( cd "$REPO_ROOT" && docker buildx build "${buildx_args[@]}" rustdesk-api/ )

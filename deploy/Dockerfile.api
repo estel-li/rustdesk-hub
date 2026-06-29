@@ -1,15 +1,13 @@
 # syntax=docker/dockerfile:1.6
 #
-# 编译 rustdesk-api(含 CE-M0-4 / M1-1..7 / M1-9 改造)+ 拉 lejianwen/rustdesk-api-web 编 admin 前端,
+# 编译 rustdesk-api(含 CE-M0-4 / M1-1..7 / M1-9 改造)+ 用根目录 rustdesk-api-web/ 编 admin 前端,
 # 产出 thin runtime image。
-# 用法:docker build -f deploy/Dockerfile.api -t rustdesk-ce/api:dev rustdesk-api/
+# 用法:./deploy/build.sh api    (build.sh 会自动注入 --build-context api-web=../rustdesk-api-web)
+#       或手动:docker buildx build -f deploy/Dockerfile.api -t rustdesk-ce/api:dev \
+#                --build-context api-web=./rustdesk-api-web rustdesk-api/
 
 ARG GO_VERSION=1.23
 ARG NODE_VERSION=20
-# admin 前端 = lejianwen/rustdesk-api-web,Vite + Vue3。下面 ref 默认 master,
-# 想锁版本就 docker build --build-arg ADMIN_WEB_REF=<commit-or-tag>。
-ARG ADMIN_WEB_REPO=https://github.com/lejianwen/rustdesk-api-web.git
-ARG ADMIN_WEB_REF=master
 
 # ---- 阶段 A:Go 编译 apimain ----
 FROM golang:${GO_VERSION}-bookworm AS builder
@@ -38,20 +36,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -ldflags "-s -w" -o /out/apimain ./cmd
 
 # ---- 阶段 B:Node 编译 admin 前端 ----
+# 源码来自 BuildKit named context `api-web`,由 build.sh 注入根目录 rustdesk-api-web/。
+# 想本地试别的 ref:在根目录 git checkout 后重跑 build.sh,不再走 ARG。
 FROM node:${NODE_VERSION}-bookworm-slim AS admin-web
 
-ARG ADMIN_WEB_REPO
-ARG ADMIN_WEB_REF
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        git \
-        ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /web
-# 先 shallow clone 到临时目录,再 checkout 指定 ref,避免 master 飘
-RUN git clone --depth 1 --branch "${ADMIN_WEB_REF}" "${ADMIN_WEB_REPO}" . \
-    || (git clone "${ADMIN_WEB_REPO}" . && git checkout "${ADMIN_WEB_REF}")
+COPY --from=api-web . .
 
 # 用 ci 走 package-lock.json,稳定可复现
 RUN --mount=type=cache,target=/root/.npm \
